@@ -1,0 +1,11 @@
+[package]
+name = "rocket-futures"
+version = "0.1.0"
+
+authors = ["LightDiscord <root@arnaud.sh>"]
+license = "MIT"
+readme = "readme.md"
+repository = "https://github.com/LightDiscord/rocket-futures"
+description = "Return a future with rocket"
+
+[dependencies]
