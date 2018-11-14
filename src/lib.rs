@@ -2,27 +2,60 @@ extern crate rocket;
 extern crate futures;
 extern crate tokio;
 
-use rocket::response::{ Responder, Response };
-use rocket::http::Status;
-use rocket::Request;
+use rocket::response::Responder;
+use rocket::{ response, Request };
 use futures::Future;
-use tokio::runtime::Runtime;
+use tokio::runtime::{ self, current_thread };
+
 use std::fmt::Debug;
 
-pub struct Wrapper<T>(T);
+pub struct Wrapper<F>(F);
 
-impl<T> Wrapper<T> {
-    pub fn new(value: T) -> Self {
+impl<F> Wrapper<F> {
+    pub fn new(value: F) -> Self {
         Wrapper(value)
     }
 }
 
-impl<'r, T> Responder<'r> for Wrapper<T>
-    where T: Future + Send + 'static,
-          T::Item: Send + Responder<'r> + 'static,
-          T::Error: Send + Debug + 'static {
-
-    fn respond_to(self, req: &Request) -> Result<Response<'r>, Status> {
-        Runtime::new().unwrap().block_on(self.0).respond_to(req)
+impl<F> Into<Runtime<F>> for Wrapper<F> {
+    fn into(self) -> Runtime<F> {
+        Runtime(self.0)
     }
 }
+
+impl<F> Into<Current<F>> for Wrapper<F> {
+    fn into(self) -> Current<F> {
+        Current(self.0)
+    }
+}
+
+pub struct Runtime<F>(F);
+
+pub struct Current<F>(F);
+
+impl<'r, F> Responder<'r> for Runtime<F>
+    where F: Future + Send + 'static,
+          F::Item: Send + Responder<'r> + 'static,
+          F::Error: Send + Debug + 'static {
+
+    fn respond_to(self, req: &Request) -> response::Result<'r> {
+        runtime::Runtime::new()
+            .unwrap()
+            .block_on(self.0)
+            .respond_to(req)
+    }
+}
+
+impl<'r, F> Responder<'r> for Current<F>
+    where F: Future,
+        F::Item: Responder<'r>,
+        F::Error: Debug {
+
+    fn respond_to(self, req: &rocket::Request) -> response::Result<'r> {
+        current_thread::Runtime::new()
+            .unwrap()
+            .block_on(self.0)
+            .respond_to(req)
+    }
+}
+
